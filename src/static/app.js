@@ -24,7 +24,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <p class="availability"><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <div class="participants">
+            <div class="participants-title">Participants</div>
+            ${details.participants.length > 0 ? `
+              <ul class="participants-list">
+                ${details.participants.map(p => `<li class="participant-item"><span class="participant-email">${p}</span><button class="unregister-btn" data-activity="${name}" data-email="${p}" aria-label="Unregister ${p}">&times;</button></li>`).join('')}
+              </ul>
+            ` : `<p class="no-participants">No participants yet</p>`}
+          </div>
         `;
 
         activitiesList.appendChild(activityCard);
@@ -34,6 +42,51 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
+
+        // Attach unregister handlers for participants in this card
+        const unregisterButtons = activityCard.querySelectorAll('.unregister-btn');
+        unregisterButtons.forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const email = btn.dataset.email;
+            const activityName = btn.dataset.activity;
+            try {
+              const resp = await fetch(`/activities/${encodeURIComponent(activityName)}/unregister?email=${encodeURIComponent(email)}`, { method: 'POST' });
+              const resJson = await resp.json();
+              if (resp.ok) {
+                // remove the participant element from the card
+                const li = btn.closest('.participant-item');
+                if (li) li.remove();
+
+                // increment availability shown
+                const availabilityP = activityCard.querySelector('.availability');
+                if (availabilityP) {
+                  const match = availabilityP.textContent.match(/(\d+)/);
+                  if (match) {
+                    const current = parseInt(match[1], 10);
+                    availabilityP.innerHTML = `<strong>Availability:</strong> ${current + 1} spots left`;
+                  }
+                }
+
+                // show success message
+                messageDiv.textContent = resJson.message || 'Participant unregistered';
+                messageDiv.className = 'success';
+                messageDiv.classList.remove('hidden');
+                setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+              } else {
+                messageDiv.textContent = resJson.detail || 'Failed to unregister participant';
+                messageDiv.className = 'error';
+                messageDiv.classList.remove('hidden');
+                setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+              }
+            } catch (err) {
+              console.error('Error unregistering participant:', err);
+              messageDiv.textContent = 'Failed to unregister. Please try again.';
+              messageDiv.className = 'error';
+              messageDiv.classList.remove('hidden');
+              setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+            }
+          });
+        });
       });
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
